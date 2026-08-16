@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IT'S TIME TO LUNCH — Outreach</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">IT'S TIME TO LUNCH</div>
+        <h1>Email Outreach</h1>
+      </div>
+      <button id="connectGoogle" class="primary">Connect Gmail</button>
+    </header>
+
+    <section id="status" class="notice">Not connected</section>
+
+    <section class="stats">
+      <article><span>Sent today</span><strong id="sentToday">0 / 10</strong></article>
+      <article><span>New companies</span><strong id="newCompanies">0</strong></article>
+      <article><span>Manual review</span><strong id="manualReview">0</strong></article>
+      <article><span>Do not contact</span><strong id="suppressed">0</strong></article>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div><h2>Campaign</h2><p>Maximum 10 successful recipients/day · 10-minute interval</p></div>
+        <div class="actions"><button id="refresh">Refresh</button><button id="start" class="primary">Start campaign</button></div>
+      </div>
+      <label>Campaign name<input id="campaignName" value="Corporate Outreach" /></label>
+      <label>Subject<input id="subject" value="IT'S TIME TO LUNCH — Corporate Lunch Service" /></label>
+      <label>Template<textarea id="body" rows="8">გამარჯობა {{contact_name}},
+
+გვსურს შემოგთავაზოთ IT'S TIME TO LUNCH-ის კორპორატიული ლანჩის სერვისი თქვენი გუნდისთვის.
+
+თუ საინტერესო იქნება, სიამოვნებით გამოგიგზავნით დეტალურ პირობებს.
+
+პატივისცემით,
+IT'S TIME TO LUNCH</textarea></label>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><div><h2>Manual review</h2><p>Invalid addresses are never automatically retried.</p></div></div>
+      <div id="reviewList" class="empty">No companies require review.</div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><div><h2>Queue</h2><p>Companies are selected in database order and never repeated after SENT.</p></div></div>
+      <div id="queueList" class="empty">No queued recipients.</div>
+    </section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
