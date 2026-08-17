@@ -1,5 +1,6 @@
 const SUPABASE_URL = 'https://mjgdecrpcfsnucuyjpjk.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_pyYRuYvo0MSn-A54El9UGg_9rHkUkY7';
+const APP_URL = 'https://beronini22-dot.github.io/its-time-to-lunch/outreach/';
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const $ = (id) => document.getElementById(id);
@@ -39,7 +40,7 @@ $('connectGoogle').onclick = async () => {
   const { error } = await db.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: window.location.href,
+      redirectTo: APP_URL,
       queryParams: { access_type: 'offline', prompt: 'consent' },
       scopes: 'https://www.googleapis.com/auth/gmail.send'
     }
