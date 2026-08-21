@@ -18,7 +18,13 @@ const pick = (row, aliases) => {
 };
 
 async function loadCampaign() {
-  const { data, error } = await db.from('campaigns').select('id,name,template_subject,template_body,daily_success_limit,interval_minutes,timezone,send_start_time,send_end_time,active').eq('active',true).order('created_at',{ascending:false}).limit(1).maybeSingle();
+  // Load the latest campaign even when paused. This keeps the editor populated
+  // while allowing the scheduler to remain stopped during testing.
+  let { data, error } = await db.from('campaigns')
+    .select('id,name,template_subject,template_body,daily_success_limit,interval_minutes,timezone,send_start_time,send_end_time,active')
+    .order('updated_at',{ascending:false})
+    .limit(1)
+    .maybeSingle();
   if (error) throw error;
   activeCampaign = data;
   if (!data) return;
@@ -82,7 +88,7 @@ $('testSend').onclick = async () => {
 
 $('saveCampaign').onclick = async () => {
   try {
-    if (!activeCampaign) throw new Error('No active campaign found.');
+    if (!activeCampaign) throw new Error('No campaign found.');
     const name = $('campaignName').value.trim();
     const subject = $('subject').value.trim();
     const body = $('body').value;
@@ -98,7 +104,7 @@ $('saveCampaign').onclick = async () => {
 
 $('importCompanies').onclick = async () => {
   try {
-    if (!activeCampaign) throw new Error('No active campaign found.');
+    if (!activeCampaign) throw new Error('No campaign found.');
     const file = $('companyFile').files[0];
     if (!file) throw new Error('Choose an Excel or CSV file first.');
     $('importResult').textContent = 'Reading file…';
