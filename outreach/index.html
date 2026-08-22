@@ -1,67 +1,16 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>IT'S TIME TO LUNCH — Outreach</title>
-  <link rel="stylesheet" href="./styles.css" />
-</head>
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>IT'S TIME TO LUNCH — Outreach</title><link rel="stylesheet" href="./styles.css"/></head>
 <body>
-  <main class="shell">
-    <header class="topbar">
-      <div>
-        <div class="eyebrow">IT'S TIME TO LUNCH</div>
-        <h1>Email Outreach</h1>
-      </div>
-      <div class="actions">
-        <button id="connectGoogle" class="primary">Connect Gmail</button>
-        <button id="testSend">Send test to myself</button>
-      </div>
-    </header>
-
-    <section id="status" class="notice">Loading…</section>
-
-    <section class="stats">
-      <article><span>Sent today</span><strong id="sentToday">0 / 10</strong></article>
-      <article><span>New companies</span><strong id="newCompanies">0</strong></article>
-      <article><span>Manual review</span><strong id="manualReview">0</strong></article>
-      <article><span>Do not contact</span><strong id="suppressed">0</strong></article>
-    </section>
-
-    <section class="card">
-      <div class="card-head">
-        <div><h2>Campaign</h2><p>Maximum 10 successful recipients/day · 10-minute interval</p></div>
-        <div class="actions"><button id="refresh">Refresh</button><button id="saveCampaign" class="primary">Save campaign</button></div>
-      </div>
-      <label>Campaign name<input id="campaignName" value="" /></label>
-      <label>Subject<input id="subject" value="" /></label>
-      <label>Template<textarea id="body" rows="12"></textarea></label>
-      <div class="small-note">Changes are saved to the live campaign and will be used by future sends.</div>
-    </section>
-
-    <section class="card">
-      <div class="card-head">
-        <div><h2>Company database</h2><p>Upload an Excel/CSV list. New companies are added to the queue automatically.</p></div>
-      </div>
-      <div class="import-box">
-        <input id="companyFile" type="file" accept=".xlsx,.xls,.csv" />
-        <button id="importCompanies" class="primary">Import list</button>
-      </div>
-      <div id="importResult" class="small-note">Expected columns: Company Name, Contact Name, Email, Alternate Email, Website, Industry.</div>
-    </section>
-
-    <section class="card">
-      <div class="card-head"><div><h2>Manual review</h2><p>Invalid addresses are never automatically retried until corrected.</p></div></div>
-      <div id="reviewList" class="empty">No companies require review.</div>
-    </section>
-
-    <section class="card">
-      <div class="card-head"><div><h2>Queue</h2><p>Recipients are processed in database order. SENT companies are never selected again.</p></div></div>
-      <div id="queueList" class="empty">No queued recipients.</div>
-    </section>
-  </main>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="./app.js"></script>
-</body>
-</html>
+<main class="shell">
+<header class="topbar"><div><div class="eyebrow">IT'S TIME TO LUNCH</div><h1>Email Outreach</h1></div><div class="actions"><button id="connectGoogle" class="primary">Connect Gmail</button><button id="testSend">Send test to myself</button></div></header>
+<section id="status" class="notice">Loading…</section>
+<section class="stats"><article><span>Sent today</span><strong id="sentToday">0 / 10</strong></article><article><span>New companies</span><strong id="newCompanies">0</strong></article><article><span>Manual review</span><strong id="manualReview">0</strong></article><article><span>Do not contact</span><strong id="suppressed">0</strong></article></section>
+<section class="card"><div class="card-head"><div><h2>Campaign</h2><p id="campaignState">Production campaign status loading…</p></div><div class="actions"><button id="refresh">Refresh</button><button id="saveCampaign" class="primary">Save campaign</button></div></div>
+<label>Campaign name<input id="campaignName" value=""/></label><label>Subject<input id="subject" value=""/></label><label>Template<textarea id="body" rows="12"></textarea></label><div class="small-note">Changes are saved to the live production campaign and used by future sends.</div></section>
+<section class="card"><div class="card-head"><div><h2>Company database</h2><p>Upload an Excel/CSV list. New companies are added to the automatic queue.</p></div></div><div class="import-box"><input id="companyFile" type="file" accept=".xlsx,.xls,.csv"/><button id="importCompanies" class="primary">Import list</button></div><div id="importResult" class="small-note">Expected columns: Company Name, Contact Name, Email, Alternate Email, Website, Industry.</div></section>
+<section class="card"><div class="card-head"><div><h2>Manual review</h2><p>Invalid addresses are never automatically retried until corrected.</p></div></div><div id="reviewList" class="empty">No companies require review.</div></section>
+<section class="card"><div class="card-head"><div><h2>Queue</h2><p>Production recipients are processed in order, max 10 successful sends/day, 10-minute spacing, 09:00–10:30 Asia/Tbilisi.</p></div></div><div id="queueList" class="empty">No queued recipients.</div></section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><script src="./app.js"></script>
+</body></html>
