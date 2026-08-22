@@ -1,149 +1,19 @@
-const SUPABASE_URL = 'https://mjgdecrpcfsnucuyjpjk.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_pyYRuYvo0MSn-A54El9UGg_9rHkUkY7';
-const APP_URL = 'https://beronini22-dot.github.io/its-time-to-lunch/outreach/';
-const { createClient } = supabase;
-const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const $ = (id) => document.getElementById(id);
-let activeCampaign = null;
-
-const escapeHtml = (v = '') => String(v).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
-const headerKey = (v='') => String(v).trim().toLowerCase().replace(/[\s_\-]+/g, '');
-const pick = (row, aliases) => {
-  const normalized = Object.fromEntries(Object.entries(row).map(([k,v]) => [headerKey(k), v]));
-  for (const alias of aliases) {
-    const value = normalized[headerKey(alias)];
-    if (value !== undefined && value !== null && String(value).trim() !== '') return String(value).trim();
-  }
-  return '';
-};
-
-async function loadCampaign() {
-  // Load the latest campaign even when paused. This keeps the editor populated
-  // while allowing the scheduler to remain stopped during testing.
-  let { data, error } = await db.from('campaigns')
-    .select('id,name,template_subject,template_body,daily_success_limit,interval_minutes,timezone,send_start_time,send_end_time,active')
-    .order('updated_at',{ascending:false})
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  activeCampaign = data;
-  if (!data) return;
-  $('campaignName').value = data.name || '';
-  $('subject').value = data.template_subject || '';
-  $('body').value = data.template_body || '';
-}
-
-async function refresh() {
-  try {
-    const [{ data: companies, error: ce }, { data: recipients, error: re }, { data: suppression, error: se }, { data: mailbox, error: me }] = await Promise.all([
-      db.from('companies').select('id,company_name,contact_name,email,status,last_error,last_sent_at').order('created_at', { ascending: true }),
-      db.from('campaign_recipients').select('id,company_id,status,scheduled_at,sent_at').order('created_at', { ascending: true }),
-      db.from('suppression_list').select('id,email,reason').order('created_at', { ascending: false }),
-      db.from('mailbox_connections').select('sender_email,status,last_test_at,last_send_at,last_error').eq('sender_email','itstimelunch9@gmail.com').order('updated_at',{ascending:false}).limit(1).maybeSingle()
-    ]);
-    if (ce || re || se || me) throw new Error(ce?.message || re?.message || se?.message || me?.message);
-    const tbilisiDate = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tbilisi',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-    const sentToday = (recipients || []).filter(r => r.status === 'SENT' && r.sent_at && new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tbilisi',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(r.sent_at)) === tbilisiDate).length;
-    $('sentToday').textContent = `${Math.min(sentToday,10)} / 10`;
-    $('newCompanies').textContent = (companies || []).filter(c => c.status === 'NEW').length;
-    const review = (companies || []).filter(c => c.status === 'NEEDS_MANUAL_REVIEW' || c.status === 'INVALID_EMAIL');
-    $('manualReview').textContent = review.length;
-    $('suppressed').textContent = (suppression || []).length;
-    if (mailbox?.status === 'CONNECTED') $('status').textContent = `Gmail connected: ${mailbox.sender_email}`;
-    else if (!$('status').textContent || $('status').textContent === 'Loading…') $('status').textContent = 'Gmail not connected';
-
-    const byId = Object.fromEntries((companies || []).map(c => [c.id,c]));
-    const queued = (recipients || []).filter(r => ['NEW','QUEUED','SENDING'].includes(r.status));
-    $('queueList').innerHTML = queued.length ? queued.slice(0,50).map(r => `<div class="row"><strong>${escapeHtml(byId[r.company_id]?.company_name || 'Unknown')}</strong><span>${escapeHtml(byId[r.company_id]?.email || '')}</span><span class="pill">${r.status}</span><span>${r.scheduled_at ? new Date(r.scheduled_at).toLocaleString() : 'Ready for next available slot'}</span></div>`).join('') : '<div class="empty">No queued recipients.</div>';
-    $('reviewList').innerHTML = review.length ? review.map(c => `<div class="row"><strong>${escapeHtml(c.company_name)}</strong><span>${escapeHtml(c.email)}</span><span class="pill">${escapeHtml(c.status)}</span><button onclick="fixEmail('${c.id}')">Fix email</button></div>`).join('') : '<div class="empty">No companies require review.</div>';
-  } catch (e) {
-    $('status').textContent = 'Database error: ' + e.message;
-  }
-}
-
-window.fixEmail = async (id) => {
-  const email = prompt('Enter the corrected email address:');
-  if (!email) return;
-  const { error } = await db.from('companies').update({ email, alternate_email: email, status: 'NEW', last_error: null, updated_at: new Date().toISOString() }).eq('id', id);
-  if (error) alert(error.message); else refresh();
-};
-
-$('connectGoogle').onclick = async () => {
-  const { error } = await db.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: APP_URL, queryParams: { access_type: 'offline', prompt: 'consent' }, scopes: 'https://www.googleapis.com/auth/gmail.send' }
-  });
-  if (error) $('status').textContent = error.message;
-};
-
-$('testSend').onclick = async () => {
-  $('status').textContent = 'Sending test email to the sender mailbox…';
-  const { data: sessionData } = await db.auth.getSession();
-  if (!sessionData.session) { $('status').textContent = 'Connect Gmail first.'; return; }
-  const { data, error } = await db.functions.invoke('send-outreach-test', { body: { to: 'itstimelunch9@gmail.com' } });
-  if (error) $('status').textContent = `Test failed: ${error.message}`;
-  else $('status').textContent = data?.ok ? 'Test email sent successfully.' : `Test failed: ${data?.error || 'Unknown error'}`;
-  refresh();
-};
-
-$('saveCampaign').onclick = async () => {
-  try {
-    if (!activeCampaign) throw new Error('No campaign found.');
-    const name = $('campaignName').value.trim();
-    const subject = $('subject').value.trim();
-    const body = $('body').value;
-    if (!name || !subject || !body.trim()) throw new Error('Campaign name, subject, and template are required.');
-    $('status').textContent = 'Saving campaign…';
-    const { data, error } = await db.rpc('save_outreach_campaign', { p_campaign_id: activeCampaign.id, p_name: name, p_subject: subject, p_body: body });
-    if (error) throw error;
-    activeCampaign = Array.isArray(data) ? data[0] : data;
-    $('status').textContent = 'Campaign saved. Future sends will use this version.';
-    await refresh();
-  } catch (e) { $('status').textContent = 'Save failed: ' + e.message; }
-};
-
-$('importCompanies').onclick = async () => {
-  try {
-    if (!activeCampaign) throw new Error('No campaign found.');
-    const file = $('companyFile').files[0];
-    if (!file) throw new Error('Choose an Excel or CSV file first.');
-    $('importResult').textContent = 'Reading file…';
-    const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: 'array' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-    if (!rows.length) throw new Error('The first sheet is empty.');
-    const payload = rows.map((r, i) => ({
-      company_name: pick(r,['company_name','company name','company','კომპანია']) || `Imported company ${i+1}`,
-      contact_name: pick(r,['contact_name','contact name','contact','სახელი','კონტაქტი']),
-      email: pick(r,['email','e-mail','mail','ელფოსტა','იმეილი']),
-      alternate_email: pick(r,['alternate_email','alternate email','alternative email','ალტერნატიული მეილი']),
-      website: pick(r,['website','site','ვებგვერდი','საიტი']),
-      industry: pick(r,['industry','sector','ინდუსტრია','სექტორი'])
-    })).filter(r => r.email);
-    if (!payload.length) throw new Error('No rows with an Email column were found.');
-    const { data, error } = await db.rpc('import_outreach_companies', { p_campaign_id: activeCampaign.id, p_rows: payload });
-    if (error) throw error;
-    $('importResult').textContent = `Imported: ${data.inserted} new companies. Skipped/updated: ${data.skipped}. They are now in the automatic queue.`;
-    $('companyFile').value = '';
-    await refresh();
-  } catch (e) { $('importResult').textContent = 'Import failed: ' + e.message; }
-};
-
-$('refresh').onclick = async () => { try { await loadCampaign(); await refresh(); } catch(e){ $('status').textContent='Database error: '+e.message; } };
-
-db.auth.onAuthStateChange(async (event, session) => {
-  if (!session) { $('status').textContent = 'Not connected'; return; }
-  $('status').textContent = `Connected as ${session.user.email}`;
-  if (session.provider_refresh_token && session.user.email?.toLowerCase() === 'itstimelunch9@gmail.com') {
-    const { error } = await db.rpc('save_google_mailbox_tokens', { p_sender_email: 'itstimelunch9@gmail.com', p_refresh_token: session.provider_refresh_token });
-    if (error) $('status').textContent = `Connected, but token save failed: ${error.message}`;
-    else $('status').textContent = 'Gmail connected and refresh token stored securely.';
-  }
-  refresh();
-});
-
-(async function init(){
-  try { await loadCampaign(); await refresh(); }
-  catch(e){ $('status').textContent = 'Initialization error: ' + e.message; }
-})();
+const SUPABASE_URL='https://mjgdecrpcfsnucuyjpjk.supabase.co';
+const SUPABASE_ANON_KEY='sb_publishable_pyYRuYvo0MSn-A54El9UGg_9rHkUkY7';
+const APP_URL='https://beronini22-dot.github.io/its-time-to-lunch/outreach/';
+const db=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY),$=id=>document.getElementById(id);
+let activeCampaign=null;
+const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+const dateTbilisi=d=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tbilisi',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(d));
+const key=v=>String(v??'').trim().toLowerCase().replace(/[\s_\-]+/g,'');
+const pick=(row,names)=>{const o=Object.fromEntries(Object.entries(row).map(([k,v])=>[key(k),v]));for(const n of names){const v=o[key(n)];if(v!==undefined&&v!==null&&String(v).trim()!=='')return String(v).trim();}return''};
+async function loadCampaign(){const {data,error}=await db.from('campaigns').select('id,name,template_subject,template_body,daily_success_limit,interval_minutes,timezone,send_start_time,send_end_time,active').eq('campaign_type','production').order('active',{ascending:false}).order('updated_at',{ascending:false}).limit(1).maybeSingle();if(error)throw error;activeCampaign=data;if(!data)return;$('campaignName').value=data.name||'';$('subject').value=data.template_subject||'';$('body').value=data.template_body||'';$('campaignState').textContent=`Production: ${data.active?'ACTIVE':'PAUSED'} · ${String(data.send_start_time).slice(0,5)}–${String(data.send_end_time).slice(0,5)} · ${data.daily_success_limit}/day · ${data.interval_minutes} min`}
+async function refresh(){try{if(!activeCampaign)await loadCampaign();const [{data:companies,error:ce},{data:recipients,error:re},{data:suppression,error:se},{data:mailbox,error:me}]=await Promise.all([db.from('companies').select('id,company_name,contact_name,email,status,last_error,last_sent_at').order('created_at'),db.from('campaign_recipients').select('id,company_id,status,scheduled_at,sent_at').eq('campaign_id',activeCampaign?.id||'00000000-0000-0000-0000-000000000000').order('created_at'),db.from('suppression_list').select('id,email,reason').order('created_at',{ascending:false}),db.from('mailbox_connections').select('sender_email,status').eq('sender_email','itstimelunch9@gmail.com').order('updated_at',{ascending:false}).limit(1).maybeSingle()]);if(ce||re||se||me)throw new Error(ce?.message||re?.message||se?.message||me?.message);const sent=(recipients||[]).filter(r=>r.status==='SENT'&&r.sent_at&&dateTbilisi(r.sent_at)===dateTbilisi(new Date())).length;$('sentToday').textContent=`${Math.min(sent,10)} / 10`;$('newCompanies').textContent=(companies||[]).filter(c=>c.status==='NEW').length;const review=(companies||[]).filter(c=>['NEEDS_MANUAL_REVIEW','INVALID_EMAIL'].includes(c.status));$('manualReview').textContent=review.length;$('suppressed').textContent=(suppression||[]).length;if(mailbox?.status==='CONNECTED')$('status').textContent=`Gmail connected: ${mailbox.sender_email}`;const byId=Object.fromEntries((companies||[]).map(c=>[c.id,c]));const queued=(recipients||[]).filter(r=>['NEW','QUEUED','SENDING'].includes(r.status));$('queueList').innerHTML=queued.length?queued.slice(0,100).map(r=>`<div class="row"><strong>${esc(byId[r.company_id]?.company_name||'Unknown')}</strong><span>${esc(byId[r.company_id]?.email||'')}</span><span class="pill">${r.status}</span><span>${r.scheduled_at?new Date(r.scheduled_at).toLocaleString():'Ready for next available slot'}</span></div>`).join(''):'<div class="empty">No queued recipients.</div>';$('reviewList').innerHTML=review.length?review.map(c=>`<div class="row"><strong>${esc(c.company_name)}</strong><span>${esc(c.email)}</span><span class="pill">${esc(c.status)}</span><button onclick="fixEmail('${c.id}')">Fix email</button></div>`).join(''):'<div class="empty">No companies require review.</div>'}catch(e){$('status').textContent='Database error: '+e.message}}
+window.fixEmail=async id=>{const email=prompt('Enter the corrected email address:');if(!email)return;const {error}=await db.from('companies').update({email,alternate_email:email,status:'NEW',last_error:null,updated_at:new Date().toISOString()}).eq('id',id);if(error)alert(error.message);else refresh()};
+$('connectGoogle').onclick=async()=>{const {error}=await db.auth.signInWithOAuth({provider:'google',options:{redirectTo:APP_URL,queryParams:{access_type:'offline',prompt:'consent'},scopes:'https://www.googleapis.com/auth/gmail.send'}});if(error)$('status').textContent=error.message};
+$('testSend').onclick=async()=>{const {data:s}=await db.auth.getSession();if(!s.session){$('status').textContent='Connect Gmail first.';return}$('status').textContent='Sending self-test…';const {data,error}=await db.functions.invoke('send-outreach-test',{body:{to:'itstimelunch9@gmail.com'}});$('status').textContent=error?`Test failed: ${error.message}`:(data?.ok?'Test email sent successfully.':`Test failed: ${data?.error||'Unknown error'}`);refresh()};
+$('saveCampaign').onclick=async()=>{try{if(!activeCampaign)throw new Error('No production campaign found.');$('status').textContent='Saving campaign…';const {data,error}=await db.rpc('save_outreach_campaign',{p_campaign_id:activeCampaign.id,p_name:$('campaignName').value.trim(),p_subject:$('subject').value.trim(),p_body:$('body').value});if(error)throw error;activeCampaign=Array.isArray(data)?data[0]:data;$('status').textContent='Campaign saved. Future sends use the saved version.';await loadCampaign();await refresh()}catch(e){$('status').textContent='Save failed: '+e.message}};
+$('importCompanies').onclick=async()=>{try{if(!activeCampaign)throw new Error('No production campaign found.');const f=$('companyFile').files[0];if(!f)throw new Error('Choose an Excel or CSV file first.');$('importResult').textContent='Reading file…';const wb=XLSX.read(await f.arrayBuffer(),{type:'array'}),sh=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(sh,{defval:''}),payload=rows.map((r,i)=>({company_name:pick(r,['company_name','company name','company','კომპანია'])||`Imported company ${i+1}`,contact_name:pick(r,['contact_name','contact name','contact','სახელი','კონტაქტი']),email:pick(r,['email','e-mail','mail','ელფოსტა','იმეილი']),alternate_email:pick(r,['alternate_email','alternate email','alternative email','ალტერნატიული მეილი']),website:pick(r,['website','site','ვებგვერდი','საიტი']),industry:pick(r,['industry','sector','ინდუსტრია','სექტორი'])})).filter(x=>x.email);if(!payload.length)throw new Error('No rows with an Email column were found.');const {data,error}=await db.rpc('import_outreach_companies',{p_campaign_id:activeCampaign.id,p_rows:payload});if(error)throw error;$('importResult').textContent=`Imported: ${data.inserted} new companies. Skipped/updated: ${data.skipped}.`;f.value='';await refresh()}catch(e){$('importResult').textContent='Import failed: '+e.message}};
+$('refresh').onclick=async()=>{try{await loadCampaign();await refresh()}catch(e){$('status').textContent='Database error: '+e.message}};
+db.auth.onAuthStateChange(async(_,session)=>{if(!session){$('status').textContent='Not connected';return}$('status').textContent=`Connected as ${session.user.email}`;if(session.provider_refresh_token&&session.user.email?.toLowerCase()==='itstimelunch9@gmail.com'){const {error}=await db.rpc('save_google_mailbox_tokens',{p_sender_email:'itstimelunch9@gmail.com',p_refresh_token:session.provider_refresh_token});if(error)$('status').textContent=`Connected, but token save failed: ${error.message}`;else $('status').textContent='Gmail connected and refresh token stored securely.'}refresh()});
+(async()=>{try{await loadCampaign();await refresh()}catch(e){$('status').textContent='Initialization error: '+e.message}})();
